@@ -21,6 +21,9 @@ jobs:
     steps:
     - name: Check Out
       uses: actions/checkout@v2
+    - name: Setup latest rust compiler (Nightly)
+      run: |
+        curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
     - name: Document
       run: cargo doc -vv
     - name: Add index files
