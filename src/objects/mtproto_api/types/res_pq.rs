@@ -1,4 +1,5 @@
 use crate::objects::traits::TypeId;
+use std::ffi::CString;
 
 /// The response type for function [super::super::functions::req_pq_multi]
 ///
@@ -11,7 +12,7 @@ pub struct ResPq {
     /// A representation of a natural number (in binary big endian format).
     /// This number is the product of two different odd prime numbers.
     /// Normally, pq is less than or equal to 2^63-1.
-    pub pq: String,
+    pub pq: CString,
     /// A list of public RSA key fingerprints (64 lower-order bits of SHA1 (server_public_key)
     pub server_public_key_fingerprints: Box<Vec<i64>>,
 }

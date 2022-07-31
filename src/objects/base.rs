@@ -1,4 +1,5 @@
 use super::traits::{Serialize, TypeId};
+use std::ffi::{CStr, CString};
 
 impl<T> Serialize for Box<T>
 where
@@ -77,13 +78,31 @@ impl TypeId for String {
     }
 }
 
+impl TypeId for CString {
+    fn type_id(&self) -> u32 {
+        0xb5286e24 // string ? = String
+    }
+}
+
 impl Serialize for String {
     fn serialize(&self) -> Vec<u8> {
         self.as_str().serialize()
     }
 }
 
+impl Serialize for CString {
+    fn serialize(&self) -> Vec<u8> {
+        self.as_c_str().serialize()
+    }
+}
+
 impl TypeId for str {
+    fn type_id(&self) -> u32 {
+        0xb5286e24 // string ? = String
+    }
+}
+
+impl TypeId for CStr {
     fn type_id(&self) -> u32 {
         0xb5286e24 // string ? = String
     }
@@ -113,9 +132,40 @@ impl Serialize for str {
     }
 }
 
+impl Serialize for CStr {
+    fn serialize(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(4);
+        let byte = self.to_bytes();
+        let le = byte.len() as u32;
+        if le <= 253 {
+            v.push(le as u8);
+            v.extend_from_slice(byte);
+            let m = 3 - (le % 4);
+            for _ in 0..m {
+                v.push(0);
+            }
+        } else {
+            v.push(254);
+            v.extend_from_slice(&le.to_le_bytes()[..3]);
+            v.extend_from_slice(byte);
+            let m = 3 - ((le - 1) % 4);
+            for _ in 0..m {
+                v.push(0);
+            }
+        }
+        v
+    }
+}
+
 impl TypeId for i128 {
     fn type_id(&self) -> u32 {
         0x84ccf7b7 // int128 4*[ int ] = Int128
+    }
+}
+
+impl Serialize for i128 {
+    fn serialize(&self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
     }
 }
 
@@ -135,6 +185,17 @@ impl From<u128> for I256 {
 impl TypeId for I256 {
     fn type_id(&self) -> u32 {
         0x9fcb633e
+    }
+}
+
+impl Serialize for I256 {
+    fn serialize(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(32);
+        v.extend_from_slice(&self.data[3].to_le_bytes());
+        v.extend_from_slice(&self.data[2].to_le_bytes());
+        v.extend_from_slice(&self.data[1].to_le_bytes());
+        v.extend_from_slice(&self.data[0].to_le_bytes());
+        v
     }
 }
 
@@ -166,4 +227,18 @@ fn test_serialize() {
         "hello".serialize(),
         vec![5, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0, 0]
     );
+    let s = String::from("s").repeat(256);
+    let mut v = vec![0xfe, 0, 1, 0];
+    v.extend_from_slice(s.as_bytes());
+    assert_eq!(s.serialize(), v);
+    let i = I256::from(1);
+    let mut v = vec![1];
+    v.extend_from_slice(&[0; 31]);
+    assert_eq!(i.serialize(), v);
+    let mut v = vec![1];
+    v.extend_from_slice(&[0; 15]);
+    assert_eq!(1i128.serialize(), v);
+    let s = CString::new(vec![1u8, 2, 3]).unwrap();
+    assert_eq!(s.as_bytes().len(), 3);
+    assert_eq!(s.serialize(), vec![3, 1, 2, 3]);
 }
