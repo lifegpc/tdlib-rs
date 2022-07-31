@@ -1,0 +1,34 @@
+name: Github Pages
+on:
+  push:
+    branches: [ master ]
+    workflow_dispatch:
+env:
+  CARGO_TERM_COLOR: always
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+jobs:
+  depoly:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check Out
+      uses: actions/checkout@v2
+    - name: Document
+      run: cargo doc -vv
+    - name: Add index files
+      run: |
+        echo '<!DOCTYPE HTML><html><head><script>window.location.href="tdlib_rs/"</script></head><body><a href="tdlib_rs/">Content Moved</a></body></html>' > target/doc/index.html
+    - name: Setup Pages
+      uses: actions/configure-pages@v1
+    - name: Upload documents
+      uses: actions/upload-pages-artifact@v1
+      with:
+        path: target/doc
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@main
