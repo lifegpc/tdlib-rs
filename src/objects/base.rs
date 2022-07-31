@@ -169,6 +169,7 @@ impl Serialize for i128 {
     }
 }
 
+#[derive(Clone, Debug)]
 /// int256
 pub struct I256 {
     data: [u64; 4],

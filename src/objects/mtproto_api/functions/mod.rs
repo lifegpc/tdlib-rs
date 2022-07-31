@@ -1,5 +1,6 @@
 use crate::objects::traits::TypeId;
 
+#[derive(Clone, Debug, tdlib_rs_impl::Serialize)]
 /// The first step to [DH exchange initiation](https://core.telegram.org/mtproto/auth_key#dh-exchange-initiation)
 pub struct req_pq_multi {
     /// Selected randomly by the client (random number) and identifies the client within this communication
