@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 derive_more = ">=0.99"
+futures-util = ">=0.3"
 rand = "0.8"
 tdlib-rs-impl = { path = "tdlib-rs-impl" }
 tokio = { version = ">=1.20", features = ["io-util", "net"] }

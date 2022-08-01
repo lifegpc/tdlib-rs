@@ -1,5 +1,6 @@
 use super::ClientError;
-use std::any::Any;
+use futures_util::lock::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::{TcpStream, ToSocketAddrs, UdpSocket};
 
 /// [Client] builder
@@ -13,17 +14,20 @@ pub struct ClientBuilder {
 impl ClientBuilder {
     /// Build the client
     /// * `address` - The address to connect to.
-    pub async fn build<A: ToSocketAddrs>(&self, address: A) -> Result<Client, ClientError> {
-        let stream: Box<dyn Any> = if self._use_udp {
+    pub async fn build<A: ToSocketAddrs>(self, address: A) -> Result<Client, ClientError> {
+        let stream = if self._use_udp {
             let socket = UdpSocket::bind("0.0.0.0:0").await?;
             socket.connect(address).await?;
-            Box::new(socket)
+            SocketHelper::from(socket)
         } else {
             let stream = TcpStream::connect(address).await?;
             stream.set_nodelay(self._no_delay)?;
-            Box::new(stream)
+            SocketHelper::from(stream)
         };
-        Ok(Client { stream })
+        Ok(Client {
+            stream,
+            builder: self,
+        })
     }
 
     /// Create a new builder
@@ -47,8 +51,67 @@ impl ClientBuilder {
     }
 }
 
+/// The transport type which used to transport payload.
+pub enum TransportType {
+    /// The lightest protocol. Max length of the payload: `16777215`.
+    /// [More](https://core.telegram.org/mtproto/mtproto-transports#abridged)
+    Abridged,
+    /// Max length of the payload: `4294967295`.
+    /// [More](https://core.telegram.org/mtproto/mtproto-transports#intermediate)
+    Intermediate,
+    /// Can be to use with [obfuscation enabled](https://core.telegram.org/mtproto/mtproto-transports#transport-obfsucation) to bypass ISP blocks.
+    /// Max length of the payload: `4294967280 - 4294967295`.
+    /// [More](https://core.telegram.org/mtproto/mtproto-transports#padded-intermediate)
+    PaddedIntermediate,
+    /// The basic MTProto transport protocol.
+    /// Max length of the payload: `4294967287`.
+    /// [More](https://core.telegram.org/mtproto/mtproto-transports#full)
+    Full,
+}
+
+/// Socket wrapper
+enum Socket {
+    /// TCP
+    TCP(TcpStream),
+    /// UDP
+    UDP(UdpSocket),
+}
+
+/// Socket wrapper
+struct SocketHelper {
+    /// Socket
+    stream: Mutex<Socket>,
+    initialized: AtomicBool,
+}
+
+impl SocketHelper {
+    pub fn is_initialized(&self) -> bool {
+        self.initialized.load(Ordering::SeqCst)
+    }
+}
+
+impl From<TcpStream> for SocketHelper {
+    fn from(stream: TcpStream) -> Self {
+        Self {
+            stream: Mutex::new(Socket::TCP(stream)),
+            initialized: AtomicBool::new(false),
+        }
+    }
+}
+
+impl From<UdpSocket> for SocketHelper {
+    fn from(stream: UdpSocket) -> Self {
+        Self {
+            stream: Mutex::new(Socket::UDP(stream)),
+            initialized: AtomicBool::new(false),
+        }
+    }
+}
+
 /// A low api level client
 pub struct Client {
     /// Internal streams
-    stream: Box<dyn Any>,
+    stream: SocketHelper,
+    /// The builder
+    builder: ClientBuilder,
 }
