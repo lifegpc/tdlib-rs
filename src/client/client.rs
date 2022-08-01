@@ -9,6 +9,7 @@ pub struct ClientBuilder {
     _no_delay: bool,
     /// Use UDP Connections
     _use_udp: bool,
+    _transport_type: TransportType,
 }
 
 impl ClientBuilder {
@@ -35,12 +36,19 @@ impl ClientBuilder {
         Self {
             _no_delay: false,
             _use_udp: false,
+            _transport_type: TransportType::Full,
         }
     }
 
     /// Set `TCP_NODELAY`
     pub fn no_delay(mut self, no_delay: bool) -> Self {
         self._no_delay = no_delay;
+        self
+    }
+
+    /// Set the transport type. Default: [TransportType::Full]
+    pub fn transport_type(mut self, transport_type: TransportType) -> Self {
+        self._transport_type = transport_type;
         self
     }
 
@@ -51,6 +59,7 @@ impl ClientBuilder {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 /// The transport type which used to transport payload.
 pub enum TransportType {
     /// The lightest protocol. Max length of the payload: `16777215`.
