@@ -1,3 +1,3 @@
 mod res_pq;
 
-pub use res_pq::resPq;
+pub use res_pq::resPQ;
