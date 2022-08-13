@@ -1,5 +1,7 @@
-use super::traits::{Serialize, TypeId};
+use super::error::DeserializeError;
+use super::traits::{Deserialize, OptDeserialize, Serialize, TypeId};
 use std::ffi::{CStr, CString};
+use std::io::Read;
 
 impl<T> Serialize for Box<T>
 where
@@ -13,11 +15,25 @@ where
     }
 }
 
+impl<T> OptDeserialize for Box<T>
+where
+    T: Deserialize<Error = DeserializeError> + TypeId + Sized,
+{
+    type Error = DeserializeError;
+    fn opt_deserialize<R: Read>(data: &mut R) -> Result<Option<Self>, Self::Error> {
+        let type_id = u32::deserialize(data)?;
+        if type_id != T::type_id2() {
+            return Ok(None);
+        }
+        Ok(Some(Box::new(T::deserialize(data)?)))
+    }
+}
+
 impl<T> TypeId for Vec<T>
 where
     T: 'static,
 {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0x1cb5c415
     }
 }
@@ -36,8 +52,20 @@ where
     }
 }
 
+impl<T> Deserialize for Vec<T> where T: Deserialize<Error = DeserializeError> + Sized {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let le = u32::deserialize(data)?;
+        let mut v = Vec::with_capacity(le as usize);
+        for _ in 0..le - 1 {
+            v.push(T::deserialize(data)?);
+        }
+        Ok(v)
+    }
+}
+
 impl TypeId for i32 {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0xa8509bda // int ? = Int
     }
 }
@@ -48,8 +76,26 @@ impl Serialize for i32 {
     }
 }
 
+impl Deserialize for i32 {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let mut buf = [0u8; 4];
+        data.read_exact(&mut buf)?;
+        Ok(i32::from_le_bytes(buf))
+    }
+}
+
+impl Deserialize for u32 {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let mut buf = [0u8; 4];
+        data.read_exact(&mut buf)?;
+        Ok(u32::from_le_bytes(buf))
+    }
+}
+
 impl TypeId for i64 {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0x22076cba // long ? = Long
     }
 }
@@ -61,7 +107,7 @@ impl Serialize for i64 {
 }
 
 impl TypeId for f64 {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0x2210c154 // double ? = Double
     }
 }
@@ -73,13 +119,13 @@ impl Serialize for f64 {
 }
 
 impl TypeId for String {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0xb5286e24 // string ? = String
     }
 }
 
 impl TypeId for CString {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0xb5286e24 // string ? = String
     }
 }
@@ -97,13 +143,13 @@ impl Serialize for CString {
 }
 
 impl TypeId for str {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0xb5286e24 // string ? = String
     }
 }
 
 impl TypeId for CStr {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0xb5286e24 // string ? = String
     }
 }
@@ -158,7 +204,7 @@ impl Serialize for CStr {
 }
 
 impl TypeId for i128 {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0x84ccf7b7 // int128 4*[ int ] = Int128
     }
 }
@@ -184,7 +230,7 @@ impl From<u128> for I256 {
 }
 
 impl TypeId for I256 {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0x9fcb633e
     }
 }
@@ -242,4 +288,10 @@ fn test_serialize() {
     let s = CString::new(vec![1u8, 2, 3]).unwrap();
     assert_eq!(s.as_bytes().len(), 3);
     assert_eq!(s.serialize(), vec![3, 1, 2, 3]);
+}
+
+#[test]
+fn test_deserialize() {
+    assert_eq!(i32::deserialize_from_bytes(&(-1).serialize()).unwrap(), -1);
+    assert_eq!(u32::deserialize_from_bytes(&(-1).serialize()).unwrap(), 0xffffffff);
 }

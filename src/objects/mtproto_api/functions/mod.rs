@@ -20,7 +20,7 @@ impl req_pq_multi {
 }
 
 impl TypeId for req_pq_multi {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0xbe7e8ef1
     }
 }

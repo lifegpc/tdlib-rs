@@ -22,7 +22,7 @@ pub struct resPQ {
 }
 
 impl TypeId for resPQ {
-    fn type_id(&self) -> u32 {
+    fn type_id2() -> u32 {
         0x05162463
     }
 }
