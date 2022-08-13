@@ -273,7 +273,16 @@ impl Serialize for i128 {
     }
 }
 
-#[derive(Clone, Debug)]
+impl Deserialize for i128 {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let mut buf = [0u8; 16];
+        data.read_exact(&mut buf)?;
+        Ok(i128::from_le_bytes(buf))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 /// int256
 pub struct I256 {
     data: [u64; 4],
@@ -301,6 +310,22 @@ impl Serialize for I256 {
         v.extend_from_slice(&self.data[1].to_le_bytes());
         v.extend_from_slice(&self.data[0].to_le_bytes());
         v
+    }
+}
+
+impl Deserialize for I256 {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let mut buf = [0u8; 32];
+        data.read_exact(&mut buf)?;
+        Ok(Self {
+            data: [
+                u64::from_le_bytes(buf[24..32].try_into().unwrap()),
+                u64::from_le_bytes(buf[16..24].try_into().unwrap()),
+                u64::from_le_bytes(buf[8..16].try_into().unwrap()),
+                u64::from_le_bytes(buf[0..8].try_into().unwrap()),
+            ],
+        })
     }
 }
 
@@ -374,4 +399,10 @@ fn test_deserialize() {
         CString::deserialize_from_bytes(&cs.serialize()).unwrap(),
         cs
     );
+    assert_eq!(
+        i128::deserialize_from_bytes(&(2313213239210938210391283i128).serialize()).unwrap(),
+        2313213239210938210391283
+    );
+    let i = I256 { data: [1, 2, 3, 4] };
+    assert_eq!(I256::deserialize_from_bytes(&i.serialize()).unwrap(), i);
 }
