@@ -1,5 +1,6 @@
 use super::error::DeserializeError;
 use super::traits::{Deserialize, OptDeserialize, Serialize, TypeId};
+use bytes::BytesMut;
 use std::ffi::{CStr, CString};
 use std::io::Read;
 
@@ -52,7 +53,10 @@ where
     }
 }
 
-impl<T> Deserialize for Vec<T> where T: Deserialize<Error = DeserializeError> + Sized {
+impl<T> Deserialize for Vec<T>
+where
+    T: Deserialize<Error = DeserializeError> + Sized,
+{
     type Error = DeserializeError;
     fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
         let le = u32::deserialize(data)?;
@@ -106,6 +110,15 @@ impl Serialize for i64 {
     }
 }
 
+impl Deserialize for i64 {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let mut buf = [0u8; 8];
+        data.read_exact(&mut buf)?;
+        Ok(i64::from_le_bytes(buf))
+    }
+}
+
 impl TypeId for f64 {
     fn type_id2() -> u32 {
         0x2210c154 // double ? = Double
@@ -115,6 +128,15 @@ impl TypeId for f64 {
 impl Serialize for f64 {
     fn serialize(&self) -> Vec<u8> {
         self.to_le_bytes().to_vec()
+    }
+}
+
+impl Deserialize for f64 {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let mut buf = [0u8; 8];
+        data.read_exact(&mut buf)?;
+        Ok(f64::from_le_bytes(buf))
     }
 }
 
@@ -136,9 +158,45 @@ impl Serialize for String {
     }
 }
 
+impl Deserialize for String {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let s = CString::deserialize(data)?;
+        Ok(s.to_str()?.to_owned())
+    }
+}
+
 impl Serialize for CString {
     fn serialize(&self) -> Vec<u8> {
         self.as_c_str().serialize()
+    }
+}
+
+impl Deserialize for CString {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let mut le = [0u8; 1];
+        data.read_exact(&mut le)?;
+        let (le, pd) = if le[0] == 255 {
+            return Err(DeserializeError::from("The data is not a string."));
+        } else if le[0] != 254 {
+            (le[0] as u32, (3 - le[0] % 4) as u32)
+        } else {
+            let mut le2 = [0u8; 3];
+            data.read_exact(&mut le2)?;
+            let le2 = [le2[0], le2[1], le2[2], 0];
+            let le = u32::from_le_bytes(le2);
+            (le, 3 - ((le - 1) % 4))
+        };
+        let mut s = BytesMut::with_capacity(le as usize);
+        s.resize(le as usize, 0);
+        data.read_exact(&mut s)?;
+        if pd > 0 {
+            let mut pdb = BytesMut::with_capacity(pd as usize);
+            pdb.resize(pd as usize, 0);
+            data.read_exact(&mut pdb)?;
+        }
+        Ok(CString::new(s.as_ref())?)
     }
 }
 
@@ -293,5 +351,27 @@ fn test_serialize() {
 #[test]
 fn test_deserialize() {
     assert_eq!(i32::deserialize_from_bytes(&(-1).serialize()).unwrap(), -1);
-    assert_eq!(u32::deserialize_from_bytes(&(-1).serialize()).unwrap(), 0xffffffff);
+    assert_eq!(
+        u32::deserialize_from_bytes(&(-1).serialize()).unwrap(),
+        0xffffffff
+    );
+    assert_eq!(
+        i64::deserialize_from_bytes(&(2313213i64).serialize()).unwrap(),
+        2313213
+    );
+    assert_eq!(
+        f64::deserialize_from_bytes(&(23232f64).serialize()).unwrap(),
+        23232f64
+    );
+    assert_eq!(
+        String::deserialize_from_bytes(&("hello".serialize())).unwrap(),
+        String::from("hello")
+    );
+    let s = String::from("s").repeat(256);
+    assert_eq!(String::deserialize_from_bytes(&s.serialize()).unwrap(), s);
+    let cs = CString::new("s2d").unwrap();
+    assert_eq!(
+        CString::deserialize_from_bytes(&cs.serialize()).unwrap(),
+        cs
+    );
 }

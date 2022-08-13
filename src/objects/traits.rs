@@ -22,10 +22,13 @@ pub trait Serialize {
 
 /// Deserialize the data
 pub trait Deserialize {
+    /// Error type
     type Error;
+    /// Deserialize the data
     fn deserialize<T: Read>(data: &mut T) -> Result<Self, Self::Error>
     where
         Self: Sized;
+    /// Deserialize the data from bytes
     fn deserialize_from_bytes<T: AsRef<[u8]>>(data: &T) -> Result<Self, Self::Error>
     where
         Self: Sized,
@@ -36,11 +39,15 @@ pub trait Deserialize {
     }
 }
 
+/// Deserialize the data
 pub trait OptDeserialize {
+    /// Error type
     type Error;
+    /// Deserialize the data
     fn opt_deserialize<T: Read>(data: &mut T) -> Result<Option<Self>, Self::Error>
     where
         Self: Sized;
+    /// Deserialize the data from bytes
     fn opt_deserialize_from_bytes<T: AsRef<[u8]>>(data: &T) -> Result<Option<Self>, Self::Error>
     where
         Self: Sized,
