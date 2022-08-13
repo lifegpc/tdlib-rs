@@ -1,7 +1,7 @@
 use crate::objects::traits::TypeId;
 use std::ffi::CString;
 
-#[derive(Clone, Debug, tdlib_rs_impl::Serialize)]
+#[derive(Clone, Debug, tdlib_rs_impl::Deserialize, tdlib_rs_impl::Serialize)]
 /// The response type for function [super::super::functions::req_pq_multi]
 ///
 /// Origin: `resPQ#05162463 nonce:int128 server_nonce:int128 pq:string server_public_key_fingerprints:Vector<long> = ResPQ;`
