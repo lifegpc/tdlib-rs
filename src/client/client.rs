@@ -1,6 +1,12 @@
 use super::ClientError;
+use crate::objects::base::Message;
+use crate::objects::traits::{Deserialize, Serialize};
+use bytes::BytesMut;
 use futures_util::lock::Mutex;
+use std::ops::DerefMut;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs, UdpSocket};
 
 /// [Client] builder
@@ -97,6 +103,53 @@ impl SocketHelper {
     pub fn is_initialized(&self) -> bool {
         self.initialized.load(Ordering::SeqCst)
     }
+
+    pub async fn init_with(&self, ty: TransportType) -> Result<(), ClientError> {
+        match ty {
+            TransportType::Abridged => {
+                self.send(&[0xef]).await?;
+                self.initialized.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+            TransportType::Intermediate => {
+                self.send(&[0xee, 0xee, 0xee, 0xee]).await?;
+                self.initialized.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+            TransportType::PaddedIntermediate => {
+                self.send(&[0xdd, 0xdd, 0xdd, 0xdd]).await?;
+                self.initialized.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+            TransportType::Full => {
+                self.initialized.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn recv_exact(&self, data: &mut [u8]) -> Result<(), ClientError> {
+        let le = data.len();
+        let mut s = self.recv(data).await?;
+        while s < le {
+            s += self.recv(&mut data[s..]).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn recv(&self, data: &mut [u8]) -> Result<usize, ClientError> {
+        match self.stream.lock().await.deref_mut() {
+            Socket::TCP(stream) => Ok(stream.read(data).await?),
+            Socket::UDP(stream) => Ok(stream.recv(data).await?),
+        }
+    }
+
+    pub async fn send(&self, data: &[u8]) -> Result<usize, ClientError> {
+        match self.stream.lock().await.deref_mut() {
+            Socket::TCP(stream) => Ok(stream.write(data).await?),
+            Socket::UDP(stream) => Ok(stream.send(data).await?),
+        }
+    }
 }
 
 impl From<TcpStream> for SocketHelper {
@@ -123,4 +176,83 @@ pub struct Client {
     stream: SocketHelper,
     /// The builder
     builder: ClientBuilder,
+}
+
+impl Client {
+    fn gen_payload(&self, data: Vec<u8>) -> Vec<u8> {
+        match self.builder._transport_type {
+            TransportType::Abridged => {
+                if data.len() >= 508 {
+                    let mut payload = Vec::with_capacity(data.len() + 4);
+                    payload.push(0x7fu8);
+                    payload.extend_from_slice(&((data.len() / 4) as u32).to_le_bytes()[..3]);
+                    payload.extend_from_slice(&data);
+                    payload
+                } else {
+                    let mut payload = Vec::with_capacity(data.len() + 1);
+                    payload.push((data.len() / 4) as u8);
+                    payload.extend_from_slice(&data);
+                    payload
+                }
+            }
+            _ => {
+                panic!("Not implemented");
+            }
+        }
+    }
+
+    pub async fn send<S: Serialize>(&self, data: &S, auth_key: i64) -> Result<(), ClientError> {
+        if !self.stream.is_initialized() {
+            self.stream
+                .init_with(self.builder._transport_type.clone())
+                .await?;
+        }
+        let mut d = Vec::with_capacity(20);
+        d.extend_from_slice(&auth_key.serialize());
+        let message_id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            * (1 << 32);
+        d.extend_from_slice(&message_id.to_le_bytes());
+        let data = data.serialize();
+        d.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        d.extend_from_slice(&data);
+        let payload = self.gen_payload(d);
+        let mut s = self.stream.send(&payload).await?;
+        while s < payload.len() {
+            s += self.stream.send(&payload[s..]).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn recv(&self) -> Result<Message, ClientError> {
+        if !self.stream.is_initialized() {
+            return Err(ClientError::NotInitialized);
+        }
+        match self.builder._transport_type {
+            TransportType::Abridged => {
+                let mut le = [0u8; 1];
+                self.stream.recv_exact(&mut le).await?;
+                let data = if le[0] == 0x7f {
+                    let mut le = [0u8; 3];
+                    self.stream.recv_exact(&mut le).await?;
+                    let le = [le[0], le[1], le[2], 0];
+                    let le = (u32::from_le_bytes(le)) as usize * 4;
+                    let mut data = BytesMut::with_capacity(le);
+                    data.resize(le, 0);
+                    self.stream.recv_exact(&mut data).await?;
+                    data
+                } else {
+                    let le = le[0] as usize * 4;
+                    let mut data = BytesMut::with_capacity(le);
+                    data.resize(le, 0);
+                    self.stream.recv_exact(&mut data).await?;
+                    data
+                };
+                Ok(Message::deserialize_from_bytes(&data)?)
+            }
+            _ => panic!("Not implemented"),
+        }
+    }
 }

@@ -6,3 +6,5 @@ pub mod error;
 pub mod mtproto_api;
 /// Traits for objects.
 pub mod traits;
+
+pub use error::DeserializeError;

@@ -175,6 +175,14 @@ impl Serialize for CString {
 impl Deserialize for CString {
     type Error = DeserializeError;
     fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let s = BytesMut::deserialize(data)?;
+        Ok(CString::new(s.as_ref())?)
+    }
+}
+
+impl Deserialize for BytesMut {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
         let mut le = [0u8; 1];
         data.read_exact(&mut le)?;
         let (le, pd) = if le[0] == 255 {
@@ -196,7 +204,7 @@ impl Deserialize for CString {
             pdb.resize(pd as usize, 0);
             data.read_exact(&mut pdb)?;
         }
-        Ok(CString::new(s.as_ref())?)
+        Ok(s)
     }
 }
 
@@ -325,6 +333,45 @@ impl Deserialize for I256 {
                 u64::from_le_bytes(buf[8..16].try_into().unwrap()),
                 u64::from_le_bytes(buf[0..8].try_into().unwrap()),
             ],
+        })
+    }
+}
+
+/// Message struct
+#[derive(Clone, Debug)]
+pub struct Message {
+    /// The auth key
+    pub auth_key_id: i64,
+    /// Message id
+    pub message_id: i64,
+    /// Payload
+    pub payload: BytesMut,
+}
+
+impl Message {
+    /// Deserialize the message payload
+    pub fn deserialize_payload<T: Deserialize>(&self) -> Result<T, T::Error> {
+        T::deserialize_from_bytes(&self.payload)
+    }
+    /// Deserialize the message payload
+    pub fn opt_deserialize_payload<T: OptDeserialize>(&self) -> Result<Option<T>, T::Error> {
+        T::opt_deserialize_from_bytes(&self.payload)
+    }
+}
+
+impl Deserialize for Message {
+    type Error = DeserializeError;
+    fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
+        let auth_key_id = i64::deserialize(data)?;
+        let message_id = i64::deserialize(data)?;
+        let message_len = u32::deserialize(data)?;
+        let mut payload = BytesMut::with_capacity(message_len as usize);
+        payload.resize(message_len as usize, 0);
+        data.read_exact(&mut payload)?;
+        Ok(Self {
+            auth_key_id,
+            message_id,
+            payload,
         })
     }
 }
