@@ -29,7 +29,7 @@ pub trait Deserialize {
     where
         Self: Sized;
     /// Deserialize the data from bytes
-    fn deserialize_from_bytes<T: AsRef<[u8]>>(data: &T) -> Result<Self, Self::Error>
+    fn deserialize_from_bytes<T: AsRef<[u8]> + ?Sized>(data: &T) -> Result<Self, Self::Error>
     where
         Self: Sized,
     {

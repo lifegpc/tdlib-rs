@@ -154,7 +154,7 @@ impl TypeId for CString {
 
 impl Serialize for String {
     fn serialize(&self) -> Vec<u8> {
-        self.as_str().serialize()
+        self.as_bytes().serialize()
     }
 }
 
@@ -168,7 +168,7 @@ impl Deserialize for String {
 
 impl Serialize for CString {
     fn serialize(&self) -> Vec<u8> {
-        self.as_c_str().serialize()
+        self.to_bytes().serialize()
     }
 }
 
@@ -222,36 +222,36 @@ impl TypeId for CStr {
 
 impl Serialize for str {
     fn serialize(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(4);
-        let le = self.len() as u32;
-        if le <= 253 {
-            v.push(le as u8);
-            v.extend_from_slice(self.as_bytes());
-            let m = 3 - (le % 4);
-            for _ in 0..m {
-                v.push(0);
-            }
-        } else {
-            v.push(254);
-            v.extend_from_slice(&le.to_le_bytes()[..3]);
-            v.extend_from_slice(self.as_bytes());
-            let m = 3 - ((le - 1) % 4);
-            for _ in 0..m {
-                v.push(0);
-            }
-        }
-        v
+        self.as_bytes().serialize()
     }
 }
 
 impl Serialize for CStr {
     fn serialize(&self) -> Vec<u8> {
+        self.to_bytes().serialize()
+    }
+}
+
+impl TypeId for BytesMut {
+    fn type_id2() -> u32 {
+        0xb5286e24 // string ? = String
+    }
+}
+
+impl Serialize for BytesMut {
+    fn serialize(&self) -> Vec<u8> {
+        let re: &[u8] = self;
+        re.serialize()
+    }
+}
+
+impl Serialize for [u8] {
+    fn serialize(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(4);
-        let byte = self.to_bytes();
-        let le = byte.len() as u32;
+        let le = self.len() as u32;
         if le <= 253 {
             v.push(le as u8);
-            v.extend_from_slice(byte);
+            v.extend_from_slice(self);
             let m = 3 - (le % 4);
             for _ in 0..m {
                 v.push(0);
@@ -259,7 +259,7 @@ impl Serialize for CStr {
         } else {
             v.push(254);
             v.extend_from_slice(&le.to_le_bytes()[..3]);
-            v.extend_from_slice(byte);
+            v.extend_from_slice(self);
             let m = 3 - ((le - 1) % 4);
             for _ in 0..m {
                 v.push(0);

@@ -9,4 +9,6 @@ pub enum ClientError {
     TokioError(tokio::io::Error),
     /// Server error
     ServerError(i32),
+    /// Crc32 check failed.
+    Crc32CheckFailed,
 }

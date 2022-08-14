@@ -3,8 +3,9 @@ use crate::objects::base::Message;
 use crate::objects::traits::{Deserialize, Serialize};
 use bytes::BytesMut;
 use futures_util::lock::Mutex;
+use rand::{Rng, SeedableRng};
 use std::ops::DerefMut;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs, UdpSocket};
@@ -34,6 +35,7 @@ impl ClientBuilder {
         Ok(Client {
             stream,
             builder: self,
+            seq_no: AtomicU32::new(0),
         })
     }
 
@@ -68,7 +70,7 @@ impl ClientBuilder {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 /// The transport type which used to transport payload.
 pub enum TransportType {
-    /// The lightest protocol. Max length of the payload: `16777215`.
+    /// The lightest protocol. Max length of the payload: `67108864`.
     /// [More](https://core.telegram.org/mtproto/mtproto-transports#abridged)
     Abridged,
     /// Max length of the payload: `4294967295`.
@@ -82,6 +84,13 @@ pub enum TransportType {
     /// Max length of the payload: `4294967287`.
     /// [More](https://core.telegram.org/mtproto/mtproto-transports#full)
     Full,
+}
+
+impl TransportType {
+    /// Returns true if current variant is [TransportType::Full]
+    pub fn is_full(&self) -> bool {
+        *self == Self::Full
+    }
 }
 
 /// Socket wrapper
@@ -176,6 +185,8 @@ pub struct Client {
     stream: SocketHelper,
     /// The builder
     builder: ClientBuilder,
+    /// the TCP sequence number for this TCP connection: the first packet sent is numbered 0, the next one 1, etc.
+    seq_no: AtomicU32,
 }
 
 impl Client {
@@ -195,8 +206,32 @@ impl Client {
                     payload
                 }
             }
-            _ => {
-                panic!("Not implemented");
+            TransportType::Intermediate => {
+                let mut payload = Vec::with_capacity(data.len() + 4);
+                let le = data.len() as u32;
+                payload.extend_from_slice(&le.to_le_bytes());
+                payload.extend_from_slice(&data);
+                payload
+            }
+            TransportType::PaddedIntermediate => {
+                let random = rand::rngs::StdRng::from_entropy().gen::<u32>() % 16;
+                let mut payload = Vec::with_capacity(data.len() + 4 + random as usize);
+                let le = data.len() as u32 + random;
+                payload.extend_from_slice(&le.to_le_bytes());
+                payload.extend_from_slice(&data);
+                for _ in 0..random {
+                    payload.push(rand::rngs::StdRng::from_entropy().gen());
+                }
+                payload
+            }
+            TransportType::Full => {
+                let mut payload = Vec::with_capacity(data.len() + 12);
+                let le = data.len() as u32 + 12;
+                payload.extend_from_slice(&le.to_le_bytes());
+                payload.extend_from_slice(&(self.seq_no.load(Ordering::SeqCst).to_le_bytes()));
+                payload.extend_from_slice(&data);
+                payload.extend_from_slice(&(crc32fast::hash(&payload).to_le_bytes()));
+                payload
             }
         }
     }
@@ -220,6 +255,9 @@ impl Client {
         d.extend_from_slice(&data);
         let payload = self.gen_payload(d);
         let mut s = self.stream.send(&payload).await?;
+        if self.builder._transport_type.is_full() {
+            self.seq_no.fetch_add(1, Ordering::SeqCst);
+        }
         while s < payload.len() {
             s += self.stream.send(&payload[s..]).await?;
         }
@@ -257,7 +295,61 @@ impl Client {
                 }
                 Ok(Message::deserialize_from_bytes(&data)?)
             }
-            _ => panic!("Not implemented"),
+            TransportType::Intermediate => {
+                let mut le = [0u8; 4];
+                self.stream.recv_exact(&mut le).await?;
+                let le = u32::from_le_bytes(le) as usize;
+                let mut data = BytesMut::with_capacity(le);
+                data.resize(le, 0);
+                self.stream.recv_exact(&mut data).await?;
+                if le == 4 {
+                    return Err(ClientError::ServerError(i32::deserialize_from_bytes(
+                        &data,
+                    )?));
+                }
+                Ok(Message::deserialize_from_bytes(&data)?)
+            }
+            TransportType::PaddedIntermediate => {
+                let mut le = [0u8; 4];
+                self.stream.recv_exact(&mut le).await?;
+                let le = u32::from_le_bytes(le) as usize;
+                let mut data = BytesMut::with_capacity(le);
+                data.resize(le, 0);
+                self.stream.recv_exact(&mut data).await?;
+                if le == 4 {
+                    return Err(ClientError::ServerError(i32::deserialize_from_bytes(
+                        &data,
+                    )?));
+                }
+                Ok(Message::deserialize_from_bytes(&data)?)
+            }
+            TransportType::Full => {
+                let mut h = crc32fast::Hasher::new();
+                let mut le = [0u8; 4];
+                self.stream.recv_exact(&mut le).await?;
+                h.update(&le);
+                let le = u32::from_le_bytes(le) as usize;
+                let mut seq_no = [0u8; 4];
+                self.stream.recv_exact(&mut seq_no).await?;
+                h.update(&seq_no);
+                let _seq_no = u32::from_le_bytes(seq_no);
+                let mut data = BytesMut::with_capacity(le - 12);
+                data.resize(le - 12, 0);
+                self.stream.recv_exact(&mut data).await?;
+                h.update(&data);
+                let mut crc = [0u8; 4];
+                self.stream.recv_exact(&mut crc).await?;
+                let crc = u32::from_le_bytes(crc);
+                if crc != h.finalize() {
+                    return Err(ClientError::Crc32CheckFailed);
+                }
+                if le == 4 {
+                    return Err(ClientError::ServerError(i32::deserialize_from_bytes(
+                        &data,
+                    )?));
+                }
+                Ok(Message::deserialize_from_bytes(&data)?)
+            }
         }
     }
 }
