@@ -65,6 +65,6 @@ where
 {
     type Error = <T as OptDeserialize>::Error;
     fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
-        Ok(T::opt_deserialize(data)?.try_err("Failed to deserialize data.")?)
+        Ok(T::opt_deserialize(data)?.try_err("No suitable variant found.")?)
     }
 }

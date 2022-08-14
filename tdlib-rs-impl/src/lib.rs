@@ -151,6 +151,14 @@ pub fn derive_deserialize(item: TokenStream) -> TokenStream {
             }
             _ => panic!("Unimplemented"),
         },
+        _ => panic!("Unimplemented"),
+    }
+}
+
+#[proc_macro_derive(OptDeserialize)]
+pub fn derive_opt_deserialize(item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as syn::Item);
+    match item {
         syn::Item::Enum(e) => {
             let mut streams = Vec::new();
             for i in e.variants {
@@ -165,13 +173,13 @@ pub fn derive_deserialize(item: TokenStream) -> TokenStream {
                                     let ty = b.ty;
                                     streams.push(quote!(if type_id == <#ty>::type_id2() {
                                         let v = <#ty>::deserialize(data)?;
-                                        return Ok(Self::#name(Box::new(v)));
+                                        return Ok(Some(Self::#name(Box::new(v))));
                                     }));
                                 }
                                 Err(_) => {
                                     streams.push(quote!(if type_id == <#ty>::type_id2() {
                                         let v = <#ty>::deserialize(data)?;
-                                        return Ok(Self::#name(v));
+                                        return Ok(Some(Self::#name(v)));
                                     }));
                                 }
                             }
@@ -182,14 +190,14 @@ pub fn derive_deserialize(item: TokenStream) -> TokenStream {
             }
             let ident = e.ident;
             let stream = quote!(
-                impl crate::objects::traits::Deserialize for #ident {
+                impl crate::objects::traits::OptDeserialize for #ident {
                     type Error = crate::objects::error::DeserializeError;
-                    fn deserialize<R: std::io::Read>(data: &mut R) -> Result<Self, Self::Error> {
+                    fn opt_deserialize<R: std::io::Read>(data: &mut R) -> Result<Option<Self>, Self::Error> {
                         use crate::objects::traits::Deserialize;
                         use crate::objects::traits::TypeId;
                         let type_id = u32::deserialize(data)?;
                         #(#streams)*
-                        Err(Self::Error::from("No suitable variant found"))
+                        Ok(None)
                     }
                 }
             );
