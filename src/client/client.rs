@@ -250,6 +250,11 @@ impl Client {
                     self.stream.recv_exact(&mut data).await?;
                     data
                 };
+                if data.len() == 4 {
+                    return Err(ClientError::ServerError(i32::deserialize_from_bytes(
+                        &data,
+                    )?));
+                }
                 Ok(Message::deserialize_from_bytes(&data)?)
             }
             _ => panic!("Not implemented"),
