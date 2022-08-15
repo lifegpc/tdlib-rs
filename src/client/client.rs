@@ -1,5 +1,5 @@
 use super::ClientError;
-use crate::objects::base::Message;
+use crate::objects::base::UnencryptedMessage;
 use crate::objects::traits::{Deserialize, Serialize};
 use bytes::BytesMut;
 use futures_util::lock::Mutex;
@@ -159,6 +159,14 @@ impl SocketHelper {
             Socket::UDP(stream) => Ok(stream.send(data).await?),
         }
     }
+
+    pub async fn send_all(&self, data: &[u8]) -> Result<(), ClientError> {
+        let mut s = self.send(&data).await?;
+        while s < data.len() {
+            s += self.send(&data[s..]).await?;
+        }
+        Ok(())
+    }
 }
 
 impl From<TcpStream> for SocketHelper {
@@ -190,6 +198,7 @@ pub struct Client {
 }
 
 impl Client {
+    /// Gen data from payload.
     fn gen_payload(&self, data: Vec<u8>) -> Vec<u8> {
         match self.builder._transport_type {
             TransportType::Abridged => {
@@ -236,14 +245,16 @@ impl Client {
         }
     }
 
-    pub async fn send<S: Serialize>(&self, data: &S, auth_key: i64) -> Result<(), ClientError> {
+    /// Send unencrypted data
+    /// * `data` - unecrypted data
+    pub async fn send_unencrypted<S: Serialize>(&self, data: &S) -> Result<(), ClientError> {
         if !self.stream.is_initialized() {
             self.stream
                 .init_with(self.builder._transport_type.clone())
                 .await?;
         }
         let mut d = Vec::with_capacity(20);
-        d.extend_from_slice(&auth_key.serialize());
+        d.extend_from_slice(&(0i64).serialize());
         let message_id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -254,17 +265,14 @@ impl Client {
         d.extend_from_slice(&(data.len() as u32).to_le_bytes());
         d.extend_from_slice(&data);
         let payload = self.gen_payload(d);
-        let mut s = self.stream.send(&payload).await?;
         if self.builder._transport_type.is_full() {
             self.seq_no.fetch_add(1, Ordering::SeqCst);
         }
-        while s < payload.len() {
-            s += self.stream.send(&payload[s..]).await?;
-        }
-        Ok(())
+        Ok(self.stream.send_all(&payload).await?)
     }
 
-    pub async fn recv(&self) -> Result<Message, ClientError> {
+    /// Receive data
+    pub async fn recv(&self) -> Result<BytesMut, ClientError> {
         if !self.stream.is_initialized() {
             return Err(ClientError::NotInitialized);
         }
@@ -293,7 +301,7 @@ impl Client {
                         &data,
                     )?));
                 }
-                Ok(Message::deserialize_from_bytes(&data)?)
+                Ok(data)
             }
             TransportType::Intermediate => {
                 let mut le = [0u8; 4];
@@ -307,7 +315,7 @@ impl Client {
                         &data,
                     )?));
                 }
-                Ok(Message::deserialize_from_bytes(&data)?)
+                Ok(data)
             }
             TransportType::PaddedIntermediate => {
                 let mut le = [0u8; 4];
@@ -321,7 +329,7 @@ impl Client {
                         &data,
                     )?));
                 }
-                Ok(Message::deserialize_from_bytes(&data)?)
+                Ok(data)
             }
             TransportType::Full => {
                 let mut h = crc32fast::Hasher::new();
@@ -348,8 +356,15 @@ impl Client {
                         &data,
                     )?));
                 }
-                Ok(Message::deserialize_from_bytes(&data)?)
+                Ok(data)
             }
         }
+    }
+
+    /// Receive unencrypted message
+    pub async fn recv_unecrypted(&self) -> Result<UnencryptedMessage, ClientError> {
+        Ok(UnencryptedMessage::deserialize_from_bytes(
+            &self.recv().await?,
+        )?)
     }
 }

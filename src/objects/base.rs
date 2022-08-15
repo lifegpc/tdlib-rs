@@ -339,7 +339,7 @@ impl Deserialize for I256 {
 
 /// Message struct
 #[derive(Clone, Debug)]
-pub struct Message {
+pub struct UnencryptedMessage {
     /// The auth key
     pub auth_key_id: i64,
     /// Message id
@@ -348,7 +348,7 @@ pub struct Message {
     pub payload: BytesMut,
 }
 
-impl Message {
+impl UnencryptedMessage {
     /// Deserialize the message payload
     pub fn deserialize_payload<T: Deserialize>(&self) -> Result<T, T::Error> {
         T::deserialize_from_bytes(&self.payload)
@@ -359,7 +359,7 @@ impl Message {
     }
 }
 
-impl Deserialize for Message {
+impl Deserialize for UnencryptedMessage {
     type Error = DeserializeError;
     fn deserialize<R: Read>(data: &mut R) -> Result<Self, Self::Error> {
         let auth_key_id = i64::deserialize(data)?;
