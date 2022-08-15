@@ -1,4 +1,8 @@
+/// RSA public key
+mod rsa_public_key;
+
 use super::constructors::*;
+pub use rsa_public_key::RSAPublicKey;
 
 #[derive(
     Clone, Debug, tdlib_rs_impl::OptDeserialize, tdlib_rs_impl::From1, tdlib_rs_impl::Serialize,
