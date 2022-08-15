@@ -12,14 +12,13 @@ pub fn derive_serialize(item: TokenStream) -> TokenStream {
                 let mut streams = Vec::new();
                 for i in fields.named {
                     let name = i.ident;
-                    streams.push(quote!(v.extend_from_slice(&self.#name.serialize());));
+                    streams.push(quote!(self.#name.serialize(writer)?;));
                 }
                 let stream = quote!(
                     impl crate::objects::traits::Serialize for #ident {
-                        fn serialize(&self) -> Vec<u8> {
-                            let mut v = Vec::new();
+                        fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
                             #(#streams)*
-                            v
+                            Ok(())
                         }
                     }
                 );
@@ -31,12 +30,12 @@ pub fn derive_serialize(item: TokenStream) -> TokenStream {
             let mut streams = Vec::new();
             for i in e.variants {
                 let name = i.ident;
-                streams.push(quote!(Self::#name(n) => { n.serialize() }));
+                streams.push(quote!(Self::#name(n) => { n.serialize(writer) }));
             }
             let ident = e.ident;
             let stream = quote!(
                 impl crate::objects::traits::Serialize for #ident {
-                    fn serialize(&self) -> Vec<u8> {
+                    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
                         match self {
                             #(#streams)*
                         }

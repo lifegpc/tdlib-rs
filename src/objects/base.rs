@@ -2,17 +2,16 @@ use super::error::DeserializeError;
 use super::traits::{Deserialize, OptDeserialize, Serialize, TypeId};
 use bytes::BytesMut;
 use std::ffi::{CStr, CString};
-use std::io::Read;
+use std::io::{Read, Write};
 
 impl<T> Serialize for Box<T>
 where
     T: Serialize + TypeId,
 {
-    fn serialize(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(4);
-        v.extend_from_slice(&TypeId::type_id(self.as_ref()).to_le_bytes());
-        v.extend_from_slice(&self.as_ref().serialize());
-        v
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&TypeId::type_id(self.as_ref()).to_le_bytes())?;
+        self.as_ref().serialize(writer)?;
+        Ok(())
     }
 }
 
@@ -43,13 +42,12 @@ impl<T> Serialize for Vec<T>
 where
     T: Serialize + 'static,
 {
-    fn serialize(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(4);
-        v.extend_from_slice(&(self.len() as u32).to_le_bytes());
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&(self.len() as u32).to_le_bytes())?;
         for i in self.iter() {
-            v.extend_from_slice(&i.serialize());
+            i.serialize(writer)?;
         }
-        v
+        Ok(())
     }
 }
 
@@ -75,8 +73,8 @@ impl TypeId for i32 {
 }
 
 impl Serialize for i32 {
-    fn serialize(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&self.to_le_bytes())
     }
 }
 
@@ -105,8 +103,8 @@ impl TypeId for i64 {
 }
 
 impl Serialize for i64 {
-    fn serialize(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&self.to_le_bytes())
     }
 }
 
@@ -126,8 +124,8 @@ impl TypeId for f64 {
 }
 
 impl Serialize for f64 {
-    fn serialize(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&self.to_le_bytes())
     }
 }
 
@@ -153,8 +151,8 @@ impl TypeId for CString {
 }
 
 impl Serialize for String {
-    fn serialize(&self) -> Vec<u8> {
-        self.as_bytes().serialize()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.as_bytes().serialize(writer)
     }
 }
 
@@ -167,8 +165,8 @@ impl Deserialize for String {
 }
 
 impl Serialize for CString {
-    fn serialize(&self) -> Vec<u8> {
-        self.to_bytes().serialize()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.to_bytes().serialize(writer)
     }
 }
 
@@ -221,14 +219,14 @@ impl TypeId for CStr {
 }
 
 impl Serialize for str {
-    fn serialize(&self) -> Vec<u8> {
-        self.as_bytes().serialize()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.as_bytes().serialize(writer)
     }
 }
 
 impl Serialize for CStr {
-    fn serialize(&self) -> Vec<u8> {
-        self.to_bytes().serialize()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.to_bytes().serialize(writer)
     }
 }
 
@@ -239,33 +237,32 @@ impl TypeId for BytesMut {
 }
 
 impl Serialize for BytesMut {
-    fn serialize(&self) -> Vec<u8> {
-        let re: &[u8] = self;
-        re.serialize()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let bytes: &[u8] = self;
+        bytes.serialize(writer)
     }
 }
 
 impl Serialize for [u8] {
-    fn serialize(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(4);
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let le = self.len() as u32;
         if le <= 253 {
-            v.push(le as u8);
-            v.extend_from_slice(self);
+            writer.write_all(&[le as u8])?;
+            writer.write_all(self)?;
             let m = 3 - (le % 4);
             for _ in 0..m {
-                v.push(0);
+                writer.write_all(&[0])?;
             }
         } else {
-            v.push(254);
-            v.extend_from_slice(&le.to_le_bytes()[..3]);
-            v.extend_from_slice(self);
+            writer.write_all(&[254])?;
+            writer.write_all(&le.to_le_bytes()[..3])?;
+            writer.write_all(self)?;
             let m = 3 - ((le - 1) % 4);
             for _ in 0..m {
-                v.push(0);
+                writer.write_all(&[0])?;
             }
         }
-        v
+        Ok(())
     }
 }
 
@@ -276,8 +273,8 @@ impl TypeId for i128 {
 }
 
 impl Serialize for i128 {
-    fn serialize(&self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&self.to_le_bytes())
     }
 }
 
@@ -311,13 +308,12 @@ impl TypeId for I256 {
 }
 
 impl Serialize for I256 {
-    fn serialize(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(32);
-        v.extend_from_slice(&self.data[3].to_le_bytes());
-        v.extend_from_slice(&self.data[2].to_le_bytes());
-        v.extend_from_slice(&self.data[1].to_le_bytes());
-        v.extend_from_slice(&self.data[0].to_le_bytes());
-        v
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&self.data[3].to_le_bytes())?;
+        writer.write_all(&self.data[2].to_le_bytes())?;
+        writer.write_all(&self.data[1].to_le_bytes())?;
+        writer.write_all(&self.data[0].to_le_bytes())?;
+        Ok(())
     }
 }
 
@@ -384,72 +380,82 @@ fn test_type_id() {
 
 #[test]
 fn test_serialize() {
-    assert_eq!((-1).serialize(), vec![0xff, 0xff, 0xff, 0xff]);
-    assert_eq!(3223235.serialize(), vec![0xc3, 0x2e, 0x31, 0x00]);
+    assert_eq!((-1).serialize_to_vec(), vec![0xff, 0xff, 0xff, 0xff]);
+    assert_eq!(3223235.serialize_to_vec(), vec![0xc3, 0x2e, 0x31, 0x00]);
     assert_eq!(
-        Box::new(vec![1, 2, 3]).serialize(),
+        Box::new(vec![1, 2, 3]).serialize_to_vec(),
         vec![0x15, 0xc4, 0xb5, 0x1c, 3, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]
     );
-    assert_eq!(1i64.serialize(), vec![0x1, 0, 0, 0, 0, 0, 0, 0]);
+    assert_eq!(1i64.serialize_to_vec(), vec![0x1, 0, 0, 0, 0, 0, 0, 0]);
     assert_eq!(
-        0x23456789abi64.serialize(),
+        0x23456789abi64.serialize_to_vec(),
         vec![0xab, 0x89, 0x67, 0x45, 0x23, 0, 0, 0]
     );
     assert_eq!(
-        3.2.serialize(),
+        3.2.serialize_to_vec(),
         vec![0x9a, 0x99, 0x99, 0x99, 0x99, 0x99, 0x9, 0x40]
     );
-    assert_eq!("".serialize(), vec![0, 0, 0, 0]);
+    assert_eq!("".serialize_to_vec(), vec![0, 0, 0, 0]);
     assert_eq!(
-        "hello".serialize(),
+        "hello".serialize_to_vec(),
         vec![5, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0, 0]
     );
     let s = String::from("s").repeat(256);
     let mut v = vec![0xfe, 0, 1, 0];
     v.extend_from_slice(s.as_bytes());
-    assert_eq!(s.serialize(), v);
+    assert_eq!(s.serialize_to_vec(), v);
     let i = I256::from(1);
     let mut v = vec![1];
     v.extend_from_slice(&[0; 31]);
-    assert_eq!(i.serialize(), v);
+    assert_eq!(i.serialize_to_vec(), v);
     let mut v = vec![1];
     v.extend_from_slice(&[0; 15]);
-    assert_eq!(1i128.serialize(), v);
+    assert_eq!(1i128.serialize_to_vec(), v);
     let s = CString::new(vec![1u8, 2, 3]).unwrap();
     assert_eq!(s.as_bytes().len(), 3);
-    assert_eq!(s.serialize(), vec![3, 1, 2, 3]);
+    assert_eq!(s.serialize_to_vec(), vec![3, 1, 2, 3]);
 }
 
 #[test]
 fn test_deserialize() {
-    assert_eq!(i32::deserialize_from_bytes(&(-1).serialize()).unwrap(), -1);
     assert_eq!(
-        u32::deserialize_from_bytes(&(-1).serialize()).unwrap(),
+        i32::deserialize_from_bytes(&(-1).serialize_to_bytes()).unwrap(),
+        -1
+    );
+    assert_eq!(
+        u32::deserialize_from_bytes(&(-1).serialize_to_bytes()).unwrap(),
         0xffffffff
     );
     assert_eq!(
-        i64::deserialize_from_bytes(&(2313213i64).serialize()).unwrap(),
+        i64::deserialize_from_bytes(&(2313213i64).serialize_to_bytes()).unwrap(),
         2313213
     );
     assert_eq!(
-        f64::deserialize_from_bytes(&(23232f64).serialize()).unwrap(),
+        f64::deserialize_from_bytes(&(23232f64).serialize_to_bytes()).unwrap(),
         23232f64
     );
     assert_eq!(
-        String::deserialize_from_bytes(&("hello".serialize())).unwrap(),
+        String::deserialize_from_bytes(&("hello".serialize_to_bytes())).unwrap(),
         String::from("hello")
     );
     let s = String::from("s").repeat(256);
-    assert_eq!(String::deserialize_from_bytes(&s.serialize()).unwrap(), s);
+    assert_eq!(
+        String::deserialize_from_bytes(&s.serialize_to_bytes()).unwrap(),
+        s
+    );
     let cs = CString::new("s2d").unwrap();
     assert_eq!(
-        CString::deserialize_from_bytes(&cs.serialize()).unwrap(),
+        CString::deserialize_from_bytes(&cs.serialize_to_bytes()).unwrap(),
         cs
     );
     assert_eq!(
-        i128::deserialize_from_bytes(&(2313213239210938210391283i128).serialize()).unwrap(),
+        i128::deserialize_from_bytes(&(2313213239210938210391283i128).serialize_to_bytes())
+            .unwrap(),
         2313213239210938210391283
     );
     let i = I256 { data: [1, 2, 3, 4] };
-    assert_eq!(I256::deserialize_from_bytes(&i.serialize()).unwrap(), i);
+    assert_eq!(
+        I256::deserialize_from_bytes(&i.serialize_to_bytes()).unwrap(),
+        i
+    );
 }

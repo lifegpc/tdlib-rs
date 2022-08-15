@@ -254,14 +254,14 @@ impl Client {
                 .await?;
         }
         let mut d = Vec::with_capacity(20);
-        d.extend_from_slice(&(0i64).serialize());
+        d.extend_from_slice(&(0i64).serialize_to_bytes());
         let message_id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
             * (1 << 32);
         d.extend_from_slice(&message_id.to_le_bytes());
-        let data = data.serialize();
+        let data = data.serialize_to_bytes();
         d.extend_from_slice(&(data.len() as u32).to_le_bytes());
         d.extend_from_slice(&data);
         let payload = self.gen_payload(d);

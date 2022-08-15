@@ -16,8 +16,8 @@ impl RSAPublicKey {
     /// Return sha1 hash of the public key
     pub fn sha1(&self) -> BytesMut {
         let mut hasher = Sha1::new();
-        hasher.update(&self.n.serialize());
-        hasher.update(&self.e.serialize());
+        hasher.update(&self.n.serialize_to_bytes());
+        hasher.update(&self.e.serialize_to_bytes());
         BytesMut::from(hasher.finalize().as_slice())
     }
 

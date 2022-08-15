@@ -1,8 +1,8 @@
 use std::any::Any;
 
 use crate::ext::try_err::TryErr;
-use bytes::Buf;
-use std::io::Read;
+use bytes::{Buf, BufMut, BytesMut};
+use std::io::{Read, Write};
 
 /// Define the type id of the object.
 pub trait TypeId: Any {
@@ -16,8 +16,19 @@ pub trait TypeId: Any {
 
 /// Serialize the data.
 pub trait Serialize {
-    /// Serialize the data.
-    fn serialize(&self) -> Vec<u8>;
+    /// Serialize the data
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()>;
+    /// Serialize the data to bytes
+    fn serialize_to_bytes(&self) -> BytesMut {
+        let bytes = BytesMut::new();
+        let mut writer = bytes.writer();
+        self.serialize(&mut writer).unwrap();
+        writer.into_inner()
+    }
+    /// Serialize the data to vector
+    fn serialize_to_vec(&self) -> Vec<u8> {
+        self.serialize_to_bytes().to_vec()
+    }
 }
 
 /// Deserialize the data
