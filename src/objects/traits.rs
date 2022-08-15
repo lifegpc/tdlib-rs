@@ -22,7 +22,7 @@ pub trait Serialize {
     fn serialize_to_bytes(&self) -> BytesMut {
         let bytes = BytesMut::new();
         let mut writer = bytes.writer();
-        self.serialize(&mut writer).unwrap();
+        self.serialize(&mut writer).expect("The BytesMut returned IO Error.");
         writer.into_inner()
     }
     /// Serialize the data to vector
