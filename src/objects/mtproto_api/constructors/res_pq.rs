@@ -21,6 +21,13 @@ pub struct resPQ {
     pub server_public_key_fingerprints: Box<Vec<i64>>,
 }
 
+impl resPQ {
+    /// Returns (p, q)
+    pub fn pq_factorize(&self) -> Result<Option<(Vec<u8>, Vec<u8>)>, openssl::error::ErrorStack> {
+        crate::prime::pq_factorize(&self.pq)
+    }
+}
+
 impl TypeId for resPQ {
     fn type_id2() -> u32 {
         0x05162463

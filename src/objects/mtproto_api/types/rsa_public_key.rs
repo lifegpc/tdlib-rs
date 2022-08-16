@@ -4,7 +4,7 @@ use openssl::{bn::BigNum, pkey::Public, rsa::Rsa, sha::Sha1};
 
 /// RSA Public key
 ///
-/// Source: `rsa_public_key n:string e:string = RSAPublicKey;`
+/// Origin: `rsa_public_key n:string e:string = RSAPublicKey;`
 #[derive(Clone, Debug, tdlib_rs_impl::Deserialize, tdlib_rs_impl::Serialize)]
 pub struct RSAPublicKey {
     pub n: BytesMut,

@@ -4,3 +4,7 @@ pub mod client;
 mod ext;
 /// Objects
 pub mod objects;
+/// Prime geneator
+mod prime;
+/// Generate random numbers
+mod random;
