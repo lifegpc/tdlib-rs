@@ -1,7 +1,6 @@
 use crate::objects::traits::Serialize;
 use bytes::BytesMut;
-use rsa::{pkcs1::DecodeRsaPublicKey, BigUint, PublicKeyParts, RsaPublicKey};
-use sha1::{Digest, Sha1};
+use openssl::{bn::BigNum, pkey::Public, rsa::Rsa, sha::Sha1};
 
 /// RSA Public key
 ///
@@ -18,7 +17,7 @@ impl RSAPublicKey {
         let mut hasher = Sha1::new();
         hasher.update(&self.n.serialize_to_bytes());
         hasher.update(&self.e.serialize_to_bytes());
-        BytesMut::from(hasher.finalize().as_slice())
+        BytesMut::from(hasher.finish().as_slice())
     }
 
     /// Return 64 lower-order bits of SHA1
@@ -32,20 +31,28 @@ impl RSAPublicKey {
     }
 }
 
-impl TryInto<RsaPublicKey> for RSAPublicKey {
-    type Error = rsa::errors::Error;
-    fn try_into(self) -> Result<RsaPublicKey, Self::Error> {
-        RsaPublicKey::new(
-            BigUint::from_bytes_be(&self.n),
-            BigUint::from_bytes_be(&self.e),
+impl TryInto<Rsa<Public>> for RSAPublicKey {
+    type Error = openssl::error::ErrorStack;
+    fn try_into(self) -> Result<Rsa<Public>, Self::Error> {
+        let s = &self;
+        s.try_into()
+    }
+}
+
+impl TryInto<Rsa<Public>> for &RSAPublicKey {
+    type Error = openssl::error::ErrorStack;
+    fn try_into(self) -> Result<Rsa<Public>, Self::Error> {
+        Rsa::<Public>::from_public_components(
+            BigNum::from_slice(&self.n)?,
+            BigNum::from_slice(&self.e)?,
         )
     }
 }
 
-impl From<RsaPublicKey> for RSAPublicKey {
-    fn from(key: RsaPublicKey) -> Self {
-        let n = key.n().to_bytes_be();
-        let e = key.e().to_bytes_be();
+impl From<&Rsa<Public>> for RSAPublicKey {
+    fn from(key: &Rsa<Public>) -> Self {
+        let n = key.n().to_vec();
+        let e = key.e().to_vec();
         let n: &[u8] = &n;
         let e: &[u8] = &e;
         RSAPublicKey {
@@ -55,9 +62,8 @@ impl From<RsaPublicKey> for RSAPublicKey {
     }
 }
 
-impl<'a> DecodeRsaPublicKey for RSAPublicKey {
-    fn from_pkcs1_der(bytes: &[u8]) -> rsa::pkcs1::Result<Self> {
-        let key = RsaPublicKey::from_pkcs1_der(bytes)?;
-        Ok(Self::from(key))
+impl From<Rsa<Public>> for RSAPublicKey {
+    fn from(key: Rsa<Public>) -> Self {
+        Self::from(&key)
     }
 }
