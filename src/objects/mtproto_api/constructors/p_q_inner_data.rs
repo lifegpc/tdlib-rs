@@ -40,7 +40,7 @@ impl TryFrom<&resPQ> for p_q_inner_data_dc {
             nonce: value.nonce,
             server_nonce: value.server_nonce,
             new_nonce: rand::rngs::StdRng::from_entropy().gen(),
-            dc: -1,
+            dc: 0,
         })
     }
 }
@@ -90,7 +90,7 @@ impl TryFrom<&resPQ> for p_q_inner_data_temp_dc {
             nonce: value.nonce,
             server_nonce: value.server_nonce,
             new_nonce: rand::rngs::StdRng::from_entropy().gen(),
-            dc: -1,
+            dc: 0,
             expires_in: 120,
         })
     }

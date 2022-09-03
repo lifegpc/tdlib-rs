@@ -38,3 +38,17 @@ impl P_Q_inner_data {
         }
     }
 }
+
+#[derive(
+    Clone, Debug, tdlib_rs_impl::OptDeserialize, tdlib_rs_impl::From1, tdlib_rs_impl::Serialize,
+)]
+pub enum Server_DH_Params {
+    Ok(Box<server_DH_params_ok>),
+}
+
+#[derive(
+    Clone, Debug, tdlib_rs_impl::OptDeserialize, tdlib_rs_impl::From1, tdlib_rs_impl::Serialize,
+)]
+pub enum Server_DH_Inner_Data {
+    Boxed(Box<server_DH_inner_data>),
+}

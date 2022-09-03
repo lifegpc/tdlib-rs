@@ -53,23 +53,23 @@ impl req_DH_params {
     /// * `public_key_fingerprint` - The fingerprint of the server public key
     /// * `server_public_key` - Server public key
     pub fn new(
-        p_q_inner_data: P_Q_inner_data,
+        p_q_inner_data: &P_Q_inner_data,
         public_key_fingerprint: i64,
         server_public_key: &Rsa<Public>,
     ) -> Result<Self, crate::aes::EncryptError> {
-        let nonce = match &p_q_inner_data {
+        let nonce = match p_q_inner_data {
             P_Q_inner_data::P_Q_inner_data_dc(v) => v.nonce,
             P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.nonce,
         };
-        let server_nonce = match &p_q_inner_data {
+        let server_nonce = match p_q_inner_data {
             P_Q_inner_data::P_Q_inner_data_dc(v) => v.server_nonce,
             P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.server_nonce,
         };
-        let p = match &p_q_inner_data {
+        let p = match p_q_inner_data {
             P_Q_inner_data::P_Q_inner_data_dc(v) => v.p.clone(),
             P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.p.clone(),
         };
-        let q = match &p_q_inner_data {
+        let q = match p_q_inner_data {
             P_Q_inner_data::P_Q_inner_data_dc(v) => v.q.clone(),
             P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.q.clone(),
         };

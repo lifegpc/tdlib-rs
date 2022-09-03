@@ -157,9 +157,14 @@ pub fn pq_factorize(pqs: &[u8]) -> Result<Option<(Vec<u8>, Vec<u8>)>, openssl::e
     if p == 0 || pq % p != 0 {
         Ok(None)
     } else {
-        Ok(Some((
-            p.to_be_bytes().to_vec(),
-            (pq / p).to_be_bytes().to_vec(),
-        )))
+        let mut rp = p.to_be_bytes().to_vec();
+        while rp[0] == 0 {
+            rp.remove(0);
+        }
+        let mut rq = (pq / p).to_be_bytes().to_vec();
+        while rq[0] == 0 {
+            rq.remove(0);
+        }
+        Ok(Some((rp, rq)))
     }
 }
