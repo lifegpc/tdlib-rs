@@ -23,3 +23,18 @@ pub enum P_Q_inner_data {
     /// Used to create temporary authorization keys.
     P_Q_inner_data_temp_dc(Box<p_q_inner_data_temp_dc>),
 }
+
+impl P_Q_inner_data {
+    /// Create a new instance from [resPQ].
+    pub fn new(v: &resPQ, expired_in: Option<i32>) -> Result<Self, FactorizeError> {
+        if let Some(expired_in) = expired_in {
+            let mut p = p_q_inner_data_temp_dc::try_from(v)?;
+            p.expires_in = expired_in;
+            Ok(Self::P_Q_inner_data_temp_dc(Box::new(p)))
+        } else {
+            Ok(Self::P_Q_inner_data_dc(Box::new(
+                p_q_inner_data_dc::try_from(v)?,
+            )))
+        }
+    }
+}
