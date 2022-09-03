@@ -2,6 +2,10 @@
 mod rsa_public_key;
 
 use super::constructors::*;
+use crate::objects::{
+    traits::{Deserialize, TypeId},
+    DeserializeError,
+};
 pub use rsa_public_key::RSAPublicKey;
 
 #[derive(
@@ -39,11 +43,22 @@ impl P_Q_inner_data {
     }
 }
 
-#[derive(
-    Clone, Debug, tdlib_rs_impl::OptDeserialize, tdlib_rs_impl::From1, tdlib_rs_impl::Serialize,
-)]
+#[derive(Clone, Debug, tdlib_rs_impl::From1, tdlib_rs_impl::Serialize)]
 pub enum Server_DH_Params {
     Ok(Box<server_DH_params_ok>),
+    Failed(i32),
+}
+
+impl Deserialize for Server_DH_Params {
+    type Error = DeserializeError;
+    fn deserialize<T: std::io::Read>(data: &mut T) -> Result<Self, Self::Error> {
+        let type_id = u32::deserialize(data)?;
+        if type_id == server_DH_params_ok::type_id2() {
+            Ok(Self::Ok(Box::new(server_DH_params_ok::deserialize(data)?)))
+        } else {
+            Ok(Self::Failed(type_id as i32))
+        }
+    }
 }
 
 #[derive(
