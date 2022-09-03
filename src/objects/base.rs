@@ -1,6 +1,7 @@
 use super::error::DeserializeError;
 use super::traits::{Deserialize, OptDeserialize, Serialize, TypeId};
 use bytes::BytesMut;
+use rand::{distributions::Distribution, Rng};
 use std::ffi::{CStr, CString};
 use std::io::{Read, Write};
 
@@ -330,6 +331,14 @@ impl Deserialize for I256 {
                 u64::from_le_bytes(buf[0..8].try_into().unwrap()),
             ],
         })
+    }
+}
+
+impl Distribution<I256> for rand::distributions::Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> I256 {
+        I256 {
+            data: [rng.gen(), rng.gen(), rng.gen(), rng.gen()],
+        }
     }
 }
 

@@ -1,6 +1,15 @@
 use crate::objects::traits::TypeId;
 use bytes::BytesMut;
 
+/// Factorize error
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum FactorizeError {
+    /// OpenSSL Error
+    OpenSSLError(openssl::error::ErrorStack),
+    /// No prime found
+    NotFound,
+}
+
 #[derive(Clone, Debug, tdlib_rs_impl::Deserialize, tdlib_rs_impl::Serialize)]
 /// The response type for function [super::super::functions::req_pq_multi]
 ///
@@ -23,8 +32,11 @@ pub struct resPQ {
 
 impl resPQ {
     /// Returns (p, q)
-    pub fn pq_factorize(&self) -> Result<Option<(Vec<u8>, Vec<u8>)>, openssl::error::ErrorStack> {
-        crate::prime::pq_factorize(&self.pq)
+    pub fn pq_factorize(&self) -> Result<(Vec<u8>, Vec<u8>), FactorizeError> {
+        match crate::prime::pq_factorize(&self.pq)? {
+            Some(s) => Ok(s),
+            None => Err(FactorizeError::NotFound),
+        }
     }
 }
 
