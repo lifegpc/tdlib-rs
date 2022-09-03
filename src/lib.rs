@@ -1,3 +1,5 @@
+/// Used to encrypt the message
+pub mod aes;
 /// Low api level client.
 pub mod client;
 /// Extension traits for other libraries.
