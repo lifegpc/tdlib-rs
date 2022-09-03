@@ -54,7 +54,7 @@ fn rsa_pad_internal(
 }
 
 /// RSA_PAD in [step 4](https://core.telegram.org/mtproto/auth_key#presenting-proof-of-work-server-authentication).
-/// * `data` - data to encrypt, shoule less or equal to 144 bytes
+/// * `data` - data to encrypt, should less or equal to 144 bytes
 /// * `server_public_key` - server public key
 pub fn rsa_pad(data: &[u8], server_public_key: &Rsa<Public>) -> Result<BytesMut, EncryptError> {
     if data.len() > 144 {
