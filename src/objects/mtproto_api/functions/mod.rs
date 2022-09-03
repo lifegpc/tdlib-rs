@@ -1,5 +1,7 @@
-use crate::objects::traits::TypeId;
+use super::types::P_Q_inner_data;
+use crate::objects::traits::{Serialize, TypeId};
 use bytes::BytesMut;
+use openssl::{pkey::Public, rsa::Rsa};
 use rand::{Rng, SeedableRng};
 
 #[derive(Clone, Debug, tdlib_rs_impl::Serialize)]
@@ -43,6 +45,45 @@ pub struct req_DH_params {
     pub public_key_fingerprint: i64,
     /// Encrypted data.
     pub encrypted_data: BytesMut,
+}
+
+impl req_DH_params {
+    /// Create a new instance.
+    /// * `p_q_inner_data` - Inner data
+    /// * `public_key_fingerprint` - The fingerprint of the server public key
+    /// * `server_public_key` - Server public key
+    pub fn new(
+        p_q_inner_data: P_Q_inner_data,
+        public_key_fingerprint: i64,
+        server_public_key: &Rsa<Public>,
+    ) -> Result<Self, crate::aes::EncryptError> {
+        let nonce = match &p_q_inner_data {
+            P_Q_inner_data::P_Q_inner_data_dc(v) => v.nonce,
+            P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.nonce,
+        };
+        let server_nonce = match &p_q_inner_data {
+            P_Q_inner_data::P_Q_inner_data_dc(v) => v.server_nonce,
+            P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.server_nonce,
+        };
+        let p = match &p_q_inner_data {
+            P_Q_inner_data::P_Q_inner_data_dc(v) => v.p.clone(),
+            P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.p.clone(),
+        };
+        let q = match &p_q_inner_data {
+            P_Q_inner_data::P_Q_inner_data_dc(v) => v.q.clone(),
+            P_Q_inner_data::P_Q_inner_data_temp_dc(v) => v.q.clone(),
+        };
+        let raw_data = p_q_inner_data.serialize_to_bytes();
+        let encrypted_data = crate::aes::rsa_pad(&raw_data, server_public_key)?;
+        Ok(Self {
+            nonce,
+            server_nonce,
+            p,
+            q,
+            public_key_fingerprint,
+            encrypted_data,
+        })
+    }
 }
 
 impl TypeId for req_DH_params {
