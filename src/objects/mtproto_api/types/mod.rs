@@ -7,6 +7,7 @@ use crate::objects::{
     DeserializeError,
 };
 pub use rsa_public_key::RSAPublicKey;
+use std::ops::Deref;
 
 #[derive(
     Clone, Debug, tdlib_rs_impl::OptDeserialize, tdlib_rs_impl::From1, tdlib_rs_impl::Serialize,
@@ -66,4 +67,36 @@ impl Deserialize for Server_DH_Params {
 )]
 pub enum Server_DH_Inner_Data {
     Boxed(Box<server_DH_inner_data>),
+}
+
+impl Deref for Server_DH_Inner_Data {
+    type Target = server_DH_inner_data;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Boxed(v) => v,
+        }
+    }
+}
+
+#[derive(
+    Clone, Debug, tdlib_rs_impl::OptDeserialize, tdlib_rs_impl::From1, tdlib_rs_impl::Serialize,
+)]
+pub enum Client_DH_Inner_Data {
+    Boxed(Box<client_DH_inner_data>),
+}
+
+impl Client_DH_Inner_Data {
+    /// Create a new instance.
+    /// * `server_DH_inner_data` - Server's DH inner data received in [Step 5](https://core.telegram.org/mtproto/auth_key#presenting-proof-of-work-server-authentication)
+    /// * `retry_id` - Equal to zero at the time of the first attempt;
+    /// otherwise, it is equal to auth_key_aux_hash from the previous failed attempt (see [Item 9](https://core.telegram.org/mtproto/auth_key#dh-key-exchange-complete))
+    pub fn new(
+        server_inner_data: &Server_DH_Inner_Data,
+        retry_id: i64,
+    ) -> Result<Self, openssl::error::ErrorStack> {
+        Ok(Self::Boxed(Box::new(client_DH_inner_data::new(
+            server_inner_data,
+            retry_id,
+        )?)))
+    }
 }

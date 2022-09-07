@@ -1,4 +1,4 @@
-use crate::dc_cache::{is_good_prime, PrimeCacheStatus, add_prime};
+use crate::dc_cache::{add_prime, is_good_prime, PrimeCacheStatus};
 use crate::objects::traits::TypeId;
 use bytes::BytesMut;
 use openssl::bn::{BigNum, BigNumContext};

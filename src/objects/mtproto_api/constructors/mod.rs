@@ -1,8 +1,10 @@
+mod client_dh_inner_data;
 mod p_q_inner_data;
 mod res_pq;
 mod server_dh_inner_data;
 mod server_dh_params;
 
+pub use client_dh_inner_data::client_DH_inner_data;
 pub use p_q_inner_data::p_q_inner_data_dc;
 pub use p_q_inner_data::p_q_inner_data_temp_dc;
 pub use res_pq::resPQ;
