@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, parse_macro_input};
 
-#[proc_macro_derive(Serialize)]
+#[proc_macro_derive(Serialize, attributes(skip_serialize))]
 pub fn derive_serialize(item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::Item);
     match item {
@@ -10,8 +10,13 @@ pub fn derive_serialize(item: TokenStream) -> TokenStream {
             syn::Fields::Named(fields) => {
                 let ident = e.ident;
                 let mut streams = Vec::new();
-                for i in fields.named {
+                'outer: for i in fields.named {
                     let name = i.ident;
+                    for i in i.attrs {
+                        if i.path.is_ident("skip_serialize") {
+                            continue 'outer;
+                        }
+                    }
                     streams.push(quote!(self.#name.serialize(writer)?;));
                 }
                 let stream = quote!(
@@ -28,8 +33,13 @@ pub fn derive_serialize(item: TokenStream) -> TokenStream {
         },
         syn::Item::Enum(e) => {
             let mut streams = Vec::new();
-            for i in e.variants {
+            'outer: for i in e.variants {
                 let name = i.ident;
+                for i in i.attrs {
+                    if i.path.is_ident("skip_serialize") {
+                        continue 'outer;
+                    }
+                }
                 streams.push(quote!(Self::#name(n) => { n.serialize(writer) }));
             }
             let ident = e.ident;
@@ -119,7 +129,7 @@ pub fn derive_from1(item: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(Deserialize)]
+#[proc_macro_derive(Deserialize, attributes(skip_deserialize))]
 pub fn derive_deserialize(item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::Item);
     match item {
@@ -128,9 +138,16 @@ pub fn derive_deserialize(item: TokenStream) -> TokenStream {
                 let ident = e.ident;
                 let mut streams = Vec::new();
                 let mut streams2 = Vec::new();
-                for i in fields.named {
+                'outer: for i in fields.named {
                     let name = i.ident;
                     let ty = i.ty;
+                    for attr in i.attrs {
+                        if attr.path.is_ident("skip_deserialize") {
+                            streams.push(quote!(let #name = <#ty>::default();));
+                            streams2.push(quote!(#name,));
+                            continue 'outer;
+                        }
+                    }
                     streams.push(quote!(let #name = <#ty>::deserialize(data)?;));
                     streams2.push(quote!(#name,));
                 }

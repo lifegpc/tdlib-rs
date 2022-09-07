@@ -18,6 +18,10 @@ pub struct client_DH_inner_data {
     pub retry_id: i64,
     /// `pow(g, b) mod dh_prime` (See [Step 6](https://core.telegram.org/mtproto/auth_key#presenting-proof-of-work-server-authentication))
     pub g_b: BytesMut,
+    /// Used to calculate authroization key.
+    #[skip_serialize]
+    #[skip_deserialize]
+    pub b: BytesMut,
 }
 
 impl client_DH_inner_data {
@@ -43,11 +47,15 @@ impl client_DH_inner_data {
                 let g_b = g_b.to_vec();
                 let g_b: &[u8] = &g_b;
                 let g_b = BytesMut::from(g_b);
+                let b = b.to_vec();
+                let b: &[u8] = &b;
+                let b = BytesMut::from(b);
                 Ok(Self {
                     nonce: server_inner_data.nonce,
                     server_nonce: server_inner_data.server_nonce,
                     retry_id,
                     g_b,
+                    b,
                 })
             }
         }
