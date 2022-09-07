@@ -2,6 +2,8 @@
 pub mod aes;
 /// Low api level client.
 pub mod client;
+/// Cache API
+mod dc_cache;
 /// Extension traits for other libraries.
 mod ext;
 /// Objects
